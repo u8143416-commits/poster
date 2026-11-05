@@ -20,3 +20,27 @@ To reproduce my analysis:
 1. Download the files from this GitHub repository.
 2. Keep `fire_analysis.Rmd` and `data_frame_landscapes_time_dryad.csv` in the same folder.
 3. Open `fire_analysis.Rmd` in RStudio.
+## References
+
+Linley et al. (2024). Widespread resilience of animal species, functional diversity, and predator–prey networks to an unprecedented gigafire. Journal of Applied Ecology.
+https://doi.org/10.1111/1365-2664.14815
+
+Spencer et al. (2022). One year on: rapid assessment of fauna and red fox diet after the 2019–20 mega-fires in the Blue Mountains, New South Wales. Australian Zoologist.
+https://doi.org/10.7882/AZ.2022.033
+
+Gorta et al. (2023). Multi-taxon biodiversity responses to the 2019–2020 Australian megafires. Global Change Biology.
+https://doi.org/10.1111/gcb.16955
+## Data Source 
+The data used in this project came from Linley et al. (2024), "Widespread resilience of animal species, functional diversity, and predator–prey networks to an unprecedented gigafire."
+
+I downloaded the original dataset from Dryad:
+https://doi.org/10.5061/dryad.5qfttdzgn
+
+The dataset contains 24 landscapes across three study areas, with three survey periods for each landscape, giving 72 observations in total.
+
+The original data file is `data_frame_landscapes_time_dryad.csv`.
+
+The dataset is available under the Creative Commons CC0 1.0 licence. It can be copied, used, and shared without permission. The original data source is cited in this project.
+## Generative AI Declaration
+
+I used ChatGPT (OpenAI) to help me check and correct errors in my R code and improve the logic of my analysis. I wrote the basic code myself, but used ChatGPT to help me find problems and make corrections. English is not my first language, so I also used ChatGPT to check grammar and improve the clarity of my writing. I have explained the use of AI in the relevant sections of my R Markdown file. I reviewed the changes and checked the code and results in RStudio.
