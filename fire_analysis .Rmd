@@ -1,0 +1,235 @@
+---
+title: "Fire Severity Analysis"
+output: html_document
+date: "2026-11-05"
+---
+```{r}
+data <- read.csv("data_frame_landscapes_time_dryad.csv",
+                 check.names = FALSE)
+
+dim(data)
+head(data)
+```
+I used it to keep the original column names because some names contain special characters
+```{r}
+fire_data <- data[, c(
+  "richness",
+  "2020",
+  "unburnt",
+  "low/moderate",
+  "high",
+  "very_high",
+  "location",
+  "period",
+  "landscape",
+  "total_deployment_days_period"
+)]
+
+dim(fire_data)
+colSums(is.na(fire_data))
+```
+I selected these variables because I want to study how fire severity, location, and survey period are related to animal species richness. I included the 2020 fire variable to examine the extent of fire and its relationship with other fire variables. I also selected low/moderate, high, and very high fire severity to compare different levels of fire damage. Location helps me compare different study areas, while period helps me compare the three survey periods. I included landscape ID because the same landscapes were surveyed more than once. I also included camera deployment days because different survey efforts may affect the number of species recorded. After selecting these variables, I checked the number of rows and columns and looked for missing values to make sure the data were ready for further analysis.
+```{r}
+cor(fire_data$`2020`, fire_data$unburnt)
+cor(fire_data$`2020`, fire_data$`low/moderate`)
+cor(fire_data$`2020`, fire_data$high)
+cor(fire_data$`2020`, fire_data$very_high)
+```
+I compared the 2020 fire variable with four fire categories using Pearson correlation. Unburnt areas had a very strong negative correlation (r = -1.000). High fire severity had the strongest positive correlation (r = 0.846), followed by very high severity (r = 0.636) and low/moderate severity (r = 0.418). These results show that the fire variables are related to each other. I will not include the 2020 fire variable together with these severity variables in the same model because this could cause multicollinearity.
+
+```{r}
+
+mean(fire_data$total_deployment_days_period[fire_data$period == 1])
+mean(fire_data$total_deployment_days_period[fire_data$period == 2])
+mean(fire_data$total_deployment_days_period[fire_data$period == 3])
+
+plot(fire_data$total_deployment_days_period,
+     fire_data$richness,
+     xlab = "Camera survey days",
+     ylab = "Number of species",
+     main = "Camera Time and Species Richness",
+     pch = 16)
+
+abline(lm(richness ~ total_deployment_days_period,
+          data = fire_data),
+       col = "red",
+       lwd = 2)
+
+cor(fire_data$total_deployment_days_period,
+    fire_data$richness)
+```
+First, I calculated the average camera days for each survey period. Then, I made a scatter plot and added a red trend line to see the relationship between camera days and species richness. Finally, I calculated the Pearson correlation (r = 0.698). The result shows that longer camera surveys generally recorded more species. This is why I need to consider camera days in my final model.
+
+```{r}
+summary(fire_data$unburnt +
+        fire_data$`low/moderate` +
+        fire_data$high +
+        fire_data$very_high)
+```
+Before building my final model, I checked whether the four fire severity proportions added up to 1. The mean was 0.9946, which is very close to 1. This means the four variables contain overlapping information. I decided to leave out unburnt and use it as the reference proportion. I kept low/moderate, high and very high in my model to study their relationships with species richness.
+```{r}
+library(lme4)
+
+fire_data$location <- factor(fire_data$location)
+fire_data$period <- factor(fire_data$period)
+fire_data$landscape <- factor(fire_data$landscape)
+
+fire_data$log_effort <- log(fire_data$total_deployment_days_period)
+
+# linear mixed-effects model
+model <- lmer(
+  richness ~ `low/moderate` + high + very_high +
+    location + period + log_effort +
+    (1 | landscape),
+  data = fire_data
+)
+
+summary(model)
+```
+At first, I had some errors when building my model. I realised that R was not treating some variables in the way I expected. I asked AI for help, and it suggested using factor() for location, period and landscape. I followed this advice because these variables represent different groups rather than continuous numbers. I also used a linear mixed-effects model because the same landscapes were surveyed three times.
+
+```{r}
+library(ggplot2)
+
+plot_data <- data.frame(
+  richness = rep(fire_data$richness, 3
+            ),
+  severity = c(fire_data$`low/moderate`,
+               fire_data$high,
+               fire_data$very_high),
+  type = rep(c("Low/Moderate", "High", "Very High"), each = 72)
+)
+
+ggplot(plot_data, aes(x = severity, y = richness)) +
+  geom_point(color = "green", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red") +
+  facet_wrap(~ type, nrow = 1) +
+  labs(title = "Fire Severity and Species Richness",
+       x = "Proportion of landscape",
+       y = "Species richness") +
+  theme_classic()
+```
+First, I used ggplot2 to make three scatter plots for low/moderate, high and very high fire severity. At first, I used 24 instead of 72 because I knew there were 24 landscapes, and each landscape was surveyed three times. This caused a problem with my code. I asked ChatGPT to check it, and it helped me understand that there were 72 observations in total. I then changed 24 to 72.
+I used green points to show the observations and a linear model (lm) to add red trend lines and grey 95% confidence bands.
+The plots show negative trends for low/moderate and high fire severity, but a positive trend for very high fire severity. However, the confidence band for very high fire severity becomes wider at higher proportions, showing greater uncertainty. These plots show the raw relationships, so I used the mixed-effects model for my main analysis.
+```{r}
+summary(model)
+```
+
+```{r}
+confint(model, method = "Wald")
+est <- fixef(model)[2:4]
+ci <- confint(model, method = "Wald")[4:6, ]
+
+plot(est, ylim = range(ci),
+     pch = 16,
+     xlab = "Fire severity",
+     ylab = "Model estimate")
+
+axis(3, 1:3, c("Low", "High", "Very High"))
+arrows(1:3, ci[,1], 1:3, ci[,2],
+       angle = 90, code = 3, length = 0.05)
+abline(h = 0, col = "red", lty = 2)
+```
+I used fixef() to get the estimates from my mixed-effects model. Then, I used confint() with the Wald method to calculate approximate 95% confidence intervals. I used plot() to show the estimates and arrows() to show the confidence intervals. The red dashed line represents 0.
+
+The estimates for low/moderate and high fire severity were negative, while very high fire severity had a positive estimate. However, all three confidence intervals crossed zero. This means there was no clear evidence of an independent relationship between fire severity and species richness in this model. The confidence interval for very high fire severity was also wider, showing greater uncertainty.
+```{r}
+plot(model)
+```
+I used plot(model) to check my mixed-effects model. I did not need to enter the data again because R had already saved the model results. The plot shows the differences between the observed and predicted species richness. Most points were scattered around zero, with no clear pattern. This suggests that there were no obvious problems with the residuals, although further checks are needed.
+```{r}
+model <- lmer(
+  richness ~ `low/moderate` + high + very_high +
+    location + period + log_effort + (1 | landscape),
+  data = fire_data
+)
+summary(model)
+```
+Linear mixed model fit by REML ['lmerMod']
+Formula: 
+richness ~ `low/moderate` + high + very_high + location + period +  
+    log_effort + (1 | landscape)
+   Data: fire_data
+
+REML criterion at convergence: 350.3
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-2.4032 -0.6383 -0.1137  0.5544  2.2466 
+
+Random effects:
+ Groups    Name        Variance Std.Dev.
+ landscape (Intercept) 2.170    1.473   
+ Residual              9.947    3.154   
+Number of obs: 72, groups:  landscape, 24
+
+Fixed effects:
+                   Estimate Std. Error t value
+(Intercept)        -7.64328   11.10865  -0.688
+`low/moderate`     -3.13805    2.73274  -1.148
+high               -2.59148    3.13365  -0.827
+very_high           8.21123    6.18516   1.328
+locationjingellic  -1.46662    1.37629  -1.066
+locationwoomargama -0.07061    1.37976  -0.051
+period2            -3.71546    0.93660  -3.967
+period3            -5.62131    1.44700  -3.885
+log_effort          5.11338    1.60326   3.189
+
+Correlation of Fixed Effects:
+            (Intr) `lw/m` high   vry_hg lctnjn lctnwm perid2 perid3
+`low/modrt` -0.252                                                 
+high        -0.052 -0.363                                          
+very_high   -0.081  0.389 -0.752                                   
+loctnjngllc -0.358  0.225 -0.376  0.420                            
+locatnwmrgm  0.003 -0.419  0.302 -0.088  0.269                     
+period2     -0.273  0.051  0.009  0.013  0.073 -0.012              
+period3     -0.798  0.169  0.028  0.042  0.242 -0.041  0.488       
+log_effort  -0.994  0.217  0.036  0.054  0.311 -0.052  0.235  0.777
+Linear mixed model fit by REML ['lmerMod']
+Formula: 
+richness ~ `low/moderate` + high + very_high + location + period +  
+    log_effort + (1 | landscape)
+   Data: fire_data
+
+REML criterion at convergence: 350.3
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-2.4032 -0.6383 -0.1137  0.5544  2.2466 
+
+Random effects:
+ Groups    Name        Variance Std.Dev.
+ landscape (Intercept) 2.170    1.473   
+ Residual              9.947    3.154   
+Number of obs: 72, groups:  landscape, 24
+
+Fixed effects:
+                   Estimate Std. Error t value
+(Intercept)        -7.64328   11.10865  -0.688
+`low/moderate`     -3.13805    2.73274  -1.148
+high               -2.59148    3.13365  -0.827
+very_high           8.21123    6.18516   1.328
+locationjingellic  -1.46662    1.37629  -1.066
+locationwoomargama -0.07061    1.37976  -0.051
+period2            -3.71546    0.93660  -3.967
+period3            -5.62131    1.44700  -3.885
+log_effort          5.11338    1.60326   3.189
+
+Correlation of Fixed Effects:
+            (Intr) `lw/m` high   vry_hg lctnjn lctnwm perid2 perid3
+`low/modrt` -0.252                                                 
+high        -0.052 -0.363                                          
+very_high   -0.081  0.389 -0.752                                   
+loctnjngllc -0.358  0.225 -0.376  0.420                            
+locatnwmrgm  0.003 -0.419  0.302 -0.088  0.269                     
+period2     -0.273  0.051  0.009  0.013  0.073 -0.012              
+period3     -0.798  0.169  0.028  0.042  0.242 -0.041  0.488       
+log_effort  -0.994  0.217  0.036  0.054  0.311 -0.052  0.235  0.777
+
+I used a mixed-effects model to look at how fire severity, location and survey period were related to animal species richness. I used 72 observations from 24 landscapes, with each landscape surveyed three times.
+For fire severity, I found that low/moderate and high fire severity had negative estimates of -3.14 and -2.59. However, very high fire severity had a positive estimate of 8.21. This was different from what I expected. I originally thought that more severe fires would be linked to fewer animal species. After checking the 95% confidence intervals, I found that all three included zero. This means I could not find clear evidence to support my prediction.
+I also compared the three locations. Jingellic had an estimate of -1.47 and Woomargama had an estimate of -0.07 compared with BPM. These differences were small or uncertain, so I could not find clear evidence that species richness differed between the locations.
+For survey periods, I found something more interesting. Compared with Period 1, Period 2 had an estimate of -3.72 and Period 3 had an estimate of -5.62. This suggests that recorded species richness was lower in the later surveys, even after accounting for camera survey effort and the other variables.
+I also found a positive estimate of 5.11 for log camera effort. This means longer camera surveys were associated with more species being recorded. I think this is important because different survey periods had different camera survey times.
+Overall, my results were not what I first expected. I did not find a clear relationship between fire severity and species richness, but survey period and camera effort showed clearer patterns. I cannot say that fire severity has no effect. My results only show that I could not find strong evidence for its relationship with species richness in this dataset.
